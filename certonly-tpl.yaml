@@ -1,0 +1,56 @@
+#cloud-config
+
+hostname: %HOST%
+# include one or more SSH public keys
+ssh_authorized_keys:
+
+write_files:
+  - path: /etc/kubernetes/install.sh
+    owner: "root"
+    permissions: 0700
+    content: |
+%INSTALL_SCRIPT%
+  - path: /etc/kubernetes/ssl/ca.pem
+    owner: "root"
+    permissions: 0600
+    content: |
+%CA_PEM%
+  - path: /etc/kubernetes/ssl/%NODETYPE%.pem
+    owner: "root"
+    permissions: 0600
+    content: |
+%NODE_PEM%
+  - path: /etc/kubernetes/ssl/%NODETYPE%-key.pem
+    owner: "root"
+    permissions: 0600
+    content: |
+%NODE_KEY_PEM%
+  - path: /etc/kubernetes/cni/docker_opts_cni.env
+coreos:
+  etcd2:
+    # generate a new token for each unique cluster from https://discovery.etcd.io/new?size=3
+    # specify the initial size of your cluster with ?size=X
+    #discovery: https://discovery.etcd.io/0997f1b9b4886974cf21d1b3193ede5c
+    advertise-client-urls: http://%IP%:2379
+    #initial-advertise-peer-urls: http://10.10.10.20:2380
+    # listen on both the official ports and the legacy ports
+    # legacy ports can be omitted if your application doesn't depend on them
+    listen-client-urls: http://0.0.0.0:2379
+    #listen-peer-urls: http://10.10.10.20:2380
+  units:
+  - name: etcd2.service
+    command: start
+  - name: fleet.service
+    command: start
+  - name: kubeinstall.service
+    command: start
+    content: |
+      [Unit]
+      Description=K8S installer
+      After=etcd2.service
+      Requires=etcd2.service
+
+      [Service]
+      Type=oneshot
+      Environment=ADVERTISE_IP=%ADVERTISE_IP%
+      ExecStart=/etc/kubernetes/install.sh
